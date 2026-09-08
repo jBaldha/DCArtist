@@ -434,7 +434,7 @@ function downloadCSVReport() {
   const url = URL.createObjectURL(blob);
   
   const dateSuffix = startDate && endDate ? `${startDate}_to_${endDate}` : (startDate || endDate || 'All_Time');
-  const filename = `ChronoSQL_Report_${dateSuffix}.csv`;
+  const filename = `DwCArtist_Report_${dateSuffix}.csv`;
 
   const a = document.createElement('a');
   a.href = url;
