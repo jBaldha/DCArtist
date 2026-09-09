@@ -38,6 +38,15 @@ const elements = {
   modalHistoryList: document.getElementById('modal-history-list'),
   btnCloseModal: document.getElementById('btn-close-modal'),
 
+  // Todo DOM
+  screenTodo: document.getElementById('screen-todo'),
+  addTodoForm: document.getElementById('add-todo-form'),
+  todoTaskInput: document.getElementById('todo-task-input'),
+  todosList: document.getElementById('todos-list'),
+  todoTotalCount: document.getElementById('todo-total-count'),
+  todoCompletedCount: document.getElementById('todo-completed-count'),
+  todoCountBadge: document.getElementById('todo-count-badge'),
+
   // Toast Container
   toastContainer: document.getElementById('toast-container')
 };
@@ -63,6 +72,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Initial Render
     await refreshTrackerList();
     await renderReports();
+    await refreshTodoList();
 
     // Start Live Timer Interval (updates UI every 1 second)
     startLiveTimerLoop();
@@ -117,6 +127,8 @@ function setupNavigation() {
         renderReports();
       } else if (targetScreenId === 'screen-tracker') {
         refreshTrackerList();
+      } else if (targetScreenId === 'screen-todo') {
+        refreshTodoList();
       }
     });
   });
@@ -147,6 +159,23 @@ function setupFormListeners() {
       showToast('Failed to add item: ' + err.message, 'error');
     }
   });
+
+  if (elements.addTodoForm) {
+    elements.addTodoForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const task = elements.todoTaskInput.value.trim();
+      if (!task) return;
+
+      try {
+        await dbAddTodo(task);
+        elements.todoTaskInput.value = '';
+        showToast(`Added task "${task}"`, 'success');
+        await refreshTodoList();
+      } catch (err) {
+        showToast('Failed to add task: ' + err.message, 'error');
+      }
+    });
+  }
 }
 
 async function refreshTrackerList() {
@@ -169,7 +198,7 @@ async function refreshTrackerList() {
 
   elements.itemsList.innerHTML = '';
   
-  currentItems.forEach(item => {
+  currentItems.forEach((item, idx) => {
     const card = document.createElement('div');
     card.className = `item-card ${item.is_running ? 'running' : ''}`;
     card.id = `item-card-${item.id}`;
@@ -182,6 +211,9 @@ async function refreshTrackerList() {
     }
     const totalSecs = (item.total_logged_seconds || 0) + currentSessionSecs;
 
+    const isFirst = idx === 0;
+    const isLast = idx === currentItems.length - 1;
+
     card.innerHTML = `
       <div class="item-name-group">
         <span class="status-indicator"></span>
@@ -191,6 +223,12 @@ async function refreshTrackerList() {
         <span class="timer-display" id="timer-display-${item.id}">${formatSecondsHHMMSS(totalSecs)}</span>
         <button class="btn ${item.is_running ? 'btn-rose' : 'btn-emerald'} btn-toggle-timer" data-id="${item.id}" data-running="${item.is_running}">
           <i data-lucide="${item.is_running ? 'square' : 'play'}"></i>          
+        </button>
+        <button class="icon-btn btn-reorder-item-up" data-id="${item.id}" ${isFirst ? 'disabled' : ''} title="Move Up">
+          <i data-lucide="chevron-up"></i>
+        </button>
+        <button class="icon-btn btn-reorder-item-down" data-id="${item.id}" ${isLast ? 'disabled' : ''} title="Move Down">
+          <i data-lucide="chevron-down"></i>
         </button>
         <button class="icon-btn btn-history" data-id="${item.id}" data-name="${escapeHTML(item.name)}" title="View Log History">
           <i data-lucide="history"></i>
@@ -206,7 +244,7 @@ async function refreshTrackerList() {
 
   if (window.lucide) lucide.createIcons();
 
-  // Attach event handlers for toggle, history, and delete buttons
+  // Attach event handlers for toggle, reorder, history, and delete buttons
   elements.itemsList.querySelectorAll('.btn-toggle-timer').forEach(btn => {
     btn.addEventListener('click', async () => {
       const itemId = parseInt(btn.dataset.id);
@@ -224,6 +262,22 @@ async function refreshTrackerList() {
       } catch (err) {
         showToast('Error toggling timer: ' + err.message, 'error');
       }
+    });
+  });
+
+  elements.itemsList.querySelectorAll('.btn-reorder-item-up').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const itemId = parseInt(btn.dataset.id);
+      await dbMoveItem(itemId, 'up');
+      await refreshTrackerList();
+    });
+  });
+
+  elements.itemsList.querySelectorAll('.btn-reorder-item-down').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const itemId = parseInt(btn.dataset.id);
+      await dbMoveItem(itemId, 'down');
+      await refreshTrackerList();
     });
   });
 
@@ -246,6 +300,104 @@ async function refreshTrackerList() {
   });
 
   updateQuickStats();
+}
+
+/* ==========================================
+   Screen 3: Todo App Logic
+   ========================================== */
+async function refreshTodoList() {
+  if (!elements.todosList) return;
+
+  const todos = dbGetAllTodos();
+  const completedCount = todos.filter(t => t.is_completed === 1).length;
+
+  if (elements.todoTotalCount) elements.todoTotalCount.textContent = todos.length;
+  if (elements.todoCompletedCount) elements.todoCompletedCount.textContent = completedCount;
+  if (elements.todoCountBadge) elements.todoCountBadge.textContent = `${todos.length} ${todos.length === 1 ? 'task' : 'tasks'}`;
+
+  if (todos.length === 0) {
+    elements.todosList.innerHTML = `
+      <div class="empty-state">
+        <i data-lucide="list-checks" class="empty-icon"></i>
+        <p class="empty-title">No tasks added yet</p>
+        <p class="empty-desc">Type a task above and tap Add to create your todo list.</p>
+      </div>
+    `;
+    if (window.lucide) lucide.createIcons();
+    return;
+  }
+
+  elements.todosList.innerHTML = '';
+  
+  todos.forEach((todo, idx) => {
+    const card = document.createElement('div');
+    card.className = `item-card todo-card ${todo.is_completed ? 'completed' : ''}`;
+    card.id = `todo-card-${todo.id}`;
+
+    const isFirst = idx === 0;
+    const isLast = idx === todos.length - 1;
+
+    card.innerHTML = `
+      <div class="item-name-group">
+        <button class="btn-check-todo ${todo.is_completed ? 'checked' : ''}" data-id="${todo.id}" title="${todo.is_completed ? 'Mark incomplete' : 'Mark complete'}">
+          <i data-lucide="${todo.is_completed ? 'check-square' : 'square'}"></i>
+        </button>
+        <span class="item-name todo-task-text ${todo.is_completed ? 'line-through' : ''}">${escapeHTML(todo.task)}</span>
+      </div>
+      <div class="item-actions-group">
+        <button class="icon-btn btn-reorder-todo-up" data-id="${todo.id}" ${isFirst ? 'disabled' : ''} title="Move Up">
+          <i data-lucide="chevron-up"></i>
+        </button>
+        <button class="icon-btn btn-reorder-todo-down" data-id="${todo.id}" ${isLast ? 'disabled' : ''} title="Move Down">
+          <i data-lucide="chevron-down"></i>
+        </button>
+        <button class="icon-btn btn-delete-todo" data-id="${todo.id}" data-task="${escapeHTML(todo.task)}" title="Delete Task">
+          <i data-lucide="trash-2"></i>
+        </button>
+      </div>
+    `;
+
+    elements.todosList.appendChild(card);
+  });
+
+  if (window.lucide) lucide.createIcons();
+
+  // Attach event handlers for todo actions
+  elements.todosList.querySelectorAll('.btn-check-todo').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const todoId = parseInt(btn.dataset.id);
+      await dbToggleTodo(todoId);
+      await refreshTodoList();
+    });
+  });
+
+  elements.todosList.querySelectorAll('.btn-reorder-todo-up').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const todoId = parseInt(btn.dataset.id);
+      await dbMoveTodo(todoId, 'up');
+      await refreshTodoList();
+    });
+  });
+
+  elements.todosList.querySelectorAll('.btn-reorder-todo-down').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const todoId = parseInt(btn.dataset.id);
+      await dbMoveTodo(todoId, 'down');
+      await refreshTodoList();
+    });
+  });
+
+  elements.todosList.querySelectorAll('.btn-delete-todo').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const todoId = parseInt(btn.dataset.id);
+      const task = btn.dataset.task;
+      if (confirm(`Are you sure you want to delete "${task}"?`)) {
+        await dbDeleteTodo(todoId);
+        showToast(`Deleted task "${task}"`, 'info');
+        await refreshTodoList();
+      }
+    });
+  });
 }
 
 /** Ticking Loop for running timers */

@@ -1,7 +1,7 @@
 {
-  "name": "ChronoSQL - Mobile SQLite Timer & Reports",
-  "short_name": "ChronoSQL",
-  "description": "Mobile SQLite-powered time tracker and duration reporting application",
+  "name": "DwivaCraft",
+  "short_name": "DwivaCraft",
+  "description": "Simple offline time tracker",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#0f172a",

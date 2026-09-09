@@ -11,7 +11,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="ChronoSQL">
+  <meta name="apple-mobile-web-app-title" content="DwivaCraft">
   <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
 
@@ -180,6 +180,52 @@
           </div>
         </div>
       </section>
+
+      <!-- SCREEN 3: TODO APP -->
+      <section id="screen-todo" class="screen">
+        <!-- Add Todo Form -->
+        <div class="card add-form-card">
+          <h2 class="section-title">
+            <i data-lucide="check-square"></i> New Todo Task
+          </h2>
+          <form id="add-todo-form" class="add-form">
+            <div class="input-group">
+              <i data-lucide="check-circle-2" class="input-icon"></i>
+              <input type="text" id="todo-task-input" placeholder="Task description..." required autocomplete="off">
+              <button type="submit" class="btn btn-primary btn-add">
+                <i data-lucide="plus"></i> Add
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Quick Stats Strip for Todos -->
+        <div class="stats-strip">
+          <div class="stat-pill">
+            <span class="stat-label">Total Tasks</span>
+            <span class="stat-value" id="todo-total-count">0</span>
+          </div>
+          <div class="stat-pill">
+            <span class="stat-label">Completed</span>
+            <span class="stat-value" id="todo-completed-count">0</span>
+          </div>
+        </div>
+
+        <!-- List View Section -->
+        <div class="section-header">
+          <h3>Your Todo List</h3>
+          <span class="item-count-badge" id="todo-count-badge">0 tasks</span>
+        </div>
+
+        <div id="todos-list" class="items-list">
+          <!-- Dynamic todo item cards rendered here -->
+          <div class="empty-state" id="empty-todo-state">
+            <i data-lucide="list-checks" class="empty-icon"></i>
+            <p class="empty-title">No tasks added yet</p>
+            <p class="empty-desc">Type a task above and tap Add to create your todo list.</p>
+          </div>
+        </div>
+      </section>
     </main>
 
     <!-- Bottom Navigation Bar for Mobile -->
@@ -191,6 +237,10 @@
       <button class="nav-item" data-target="screen-reports">
         <i data-lucide="file-text"></i>
         <span>Reports</span>
+      </button>
+      <button class="nav-item" data-target="screen-todo">
+        <i data-lucide="check-square"></i>
+        <span>Todo</span>
       </button>
     </nav>
 

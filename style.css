@@ -717,9 +717,49 @@ body {
   backdrop-filter: blur(16px);
   border-top: 1px solid var(--border-color);
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   padding: 6px 16px calc(env(safe-area-inset-bottom) + 6px) 16px;
   z-index: 100;
+}
+
+/* Disabled state for action buttons (e.g. reorder bounds) */
+.icon-btn:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Todo Item Styling */
+.todo-card.completed {
+  opacity: 0.75;
+  background: rgba(15, 23, 42, 0.4);
+}
+
+.btn-check-todo {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  transition: all 0.2s ease;
+}
+
+.btn-check-todo.checked {
+  color: var(--emerald);
+}
+
+.btn-check-todo i {
+  width: 20px;
+  height: 20px;
+}
+
+.todo-task-text.line-through {
+  text-decoration: line-through;
+  color: var(--text-dim);
 }
 
 .nav-item {

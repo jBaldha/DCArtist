@@ -92,9 +92,17 @@ async function initDB() {
         name TEXT NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         is_running INTEGER DEFAULT 0,
-        current_start_time TEXT
+        current_start_time TEXT,
+        sort_order INTEGER DEFAULT 0
       );
     `);
+
+    // Safely add sort_order column to items table if it doesn't exist yet
+    try {
+      db.run("ALTER TABLE items ADD COLUMN sort_order INTEGER DEFAULT 0;");
+    } catch (e) {
+      // Column already exists
+    }
 
     db.run(`
       CREATE TABLE IF NOT EXISTS time_logs (
@@ -105,6 +113,16 @@ async function initDB() {
         duration_seconds INTEGER NOT NULL,
         log_date TEXT NOT NULL,
         FOREIGN KEY(item_id) REFERENCES items(id) ON DELETE CASCADE
+      );
+    `);
+
+    db.run(`
+      CREATE TABLE IF NOT EXISTS todos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        task TEXT NOT NULL,
+        is_completed INTEGER DEFAULT 0,
+        sort_order INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
     `);
 
@@ -122,8 +140,11 @@ async function initDB() {
 
 /** Add a new item to SQLite */
 async function dbAddItem(name) {
-  const stmt = db.prepare("INSERT INTO items (name, is_running) VALUES (?, 0);");
-  stmt.run([name.trim()]);
+  const maxRes = db.exec("SELECT COALESCE(MAX(sort_order), 0) FROM items;");
+  const maxOrder = (maxRes.length && maxRes[0].values.length) ? maxRes[0].values[0][0] : 0;
+
+  const stmt = db.prepare("INSERT INTO items (name, is_running, sort_order) VALUES (?, 0, ?);");
+  stmt.run([name.trim(), maxOrder + 1]);
   stmt.free();
   
   // Get last inserted ID
@@ -192,11 +213,12 @@ function dbGetAllItems() {
       i.created_at,
       i.is_running,
       i.current_start_time,
+      COALESCE(i.sort_order, 0) AS sort_order,
       COALESCE(SUM(l.duration_seconds), 0) AS total_logged_seconds
     FROM items i
     LEFT JOIN time_logs l ON i.id = l.item_id
     GROUP BY i.id
-    ORDER BY i.id DESC;
+    ORDER BY sort_order ASC, i.id ASC;
   `;
   
   const res = db.exec(query);
@@ -210,6 +232,101 @@ function dbGetAllItems() {
     });
     return obj;
   });
+}
+
+/** Reorder Tracker Item */
+async function dbMoveItem(itemId, direction) {
+  const items = dbGetAllItems();
+  const index = items.findIndex(i => i.id === itemId);
+  if (index === -1) return;
+  const targetIndex = direction === 'up' ? index - 1 : index + 1;
+  if (targetIndex < 0 || targetIndex >= items.length) return;
+
+  // Normalize sort_order
+  items.forEach((item, i) => {
+    item.sort_order = i + 1;
+  });
+
+  const temp = items[index].sort_order;
+  items[index].sort_order = items[targetIndex].sort_order;
+  items[targetIndex].sort_order = temp;
+
+  items.forEach(item => {
+    db.run("UPDATE items SET sort_order = ? WHERE id = ?;", [item.sort_order, item.id]);
+  });
+
+  await saveDBToStorage();
+}
+
+/* ==========================================
+   Todo CRUD Query Methods
+   ========================================== */
+
+/** Add a new todo task */
+async function dbAddTodo(task) {
+  const maxRes = db.exec("SELECT COALESCE(MAX(sort_order), 0) FROM todos;");
+  const maxOrder = (maxRes.length && maxRes[0].values.length) ? maxRes[0].values[0][0] : 0;
+
+  const stmt = db.prepare("INSERT INTO todos (task, is_completed, sort_order) VALUES (?, 0, ?);");
+  stmt.run([task.trim(), maxOrder + 1]);
+  stmt.free();
+
+  const res = db.exec("SELECT last_insert_rowid() as id;");
+  const lastId = res[0].values[0][0];
+
+  await saveDBToStorage();
+  return lastId;
+}
+
+/** Fetch all todos sorted by sort_order ASC */
+function dbGetAllTodos() {
+  const query = `SELECT id, task, is_completed, sort_order, created_at FROM todos ORDER BY sort_order ASC, id ASC;`;
+  const res = db.exec(query);
+  if (!res.length) return [];
+
+  const columns = res[0].columns;
+  return res[0].values.map(row => {
+    const obj = {};
+    columns.forEach((col, idx) => {
+      obj[col] = row[idx];
+    });
+    return obj;
+  });
+}
+
+/** Toggle completion state of a todo */
+async function dbToggleTodo(todoId) {
+  db.run("UPDATE todos SET is_completed = CASE WHEN is_completed = 1 THEN 0 ELSE 1 END WHERE id = ?;", [todoId]);
+  await saveDBToStorage();
+}
+
+/** Delete a todo item */
+async function dbDeleteTodo(todoId) {
+  db.run("DELETE FROM todos WHERE id = ?;", [todoId]);
+  await saveDBToStorage();
+}
+
+/** Reorder Todo item */
+async function dbMoveTodo(todoId, direction) {
+  const todos = dbGetAllTodos();
+  const index = todos.findIndex(t => t.id === todoId);
+  if (index === -1) return;
+  const targetIndex = direction === 'up' ? index - 1 : index + 1;
+  if (targetIndex < 0 || targetIndex >= todos.length) return;
+
+  todos.forEach((t, i) => {
+    t.sort_order = i + 1;
+  });
+
+  const temp = todos[index].sort_order;
+  todos[index].sort_order = todos[targetIndex].sort_order;
+  todos[targetIndex].sort_order = temp;
+
+  todos.forEach(t => {
+    db.run("UPDATE todos SET sort_order = ? WHERE id = ?;", [t.sort_order, t.id]);
+  });
+
+  await saveDBToStorage();
 }
 
 /** Fetch log history for a single item */

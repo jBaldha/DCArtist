@@ -1,4 +1,4 @@
-const CACHE_NAME = 'chronosql-v1';
+const CACHE_NAME = 'DwivaCraft-v2';
 const PRECACHE_ASSETS = [
   './',
   './index.html',
